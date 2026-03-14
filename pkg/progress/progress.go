@@ -31,17 +31,24 @@ func (p *Progress) Add(n int64) {
 func (p *Progress) Print() {
 	downloaded := atomic.LoadInt64(&p.Downloaded)
 
-	percent := float64(downloaded) / float64(p.Total) * 100
+	percent := 0.0
+	if p.Total > 0 {
+		percent = float64(downloaded) / float64(p.Total) * 100
+	}
 
 	now := time.Now()
 	elapsed := now.Sub(p.lastTime).Seconds()
+	totalTimeElapsed := now.Sub(p.startTime).Seconds()
 
 	bytes := downloaded - p.lastBytes
 
-	speed := float64(bytes) / elapsed / (1024 * 1024)
+	speed := 0.0
+	if elapsed > 0 {
+		speed = float64(bytes) / elapsed / (1024 * 1024)
+	}
 
 	p.lastBytes = downloaded
 	p.lastTime = now
 
-	fmt.Printf("\rDownloading: %.2f%% | Speed: %.2f MB/s", percent, speed)
+	fmt.Printf("\rDownloading: %.2f%% | Speed: %.2f MB/s | Time elapsed: %.0f s", percent, speed, totalTimeElapsed)
 }

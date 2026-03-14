@@ -1,61 +1,30 @@
 package downloader
 
 import (
-	"crypto/tls"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/Anarghya1610/godownloader/internal/utils"
 	"github.com/Anarghya1610/godownloader/pkg/progress"
 )
 
-func getFileSize(url string, client *http.Client) (int64, error) {
-	resp, err := client.Head(url)
-	if err == nil {
-		defer resp.Body.Close()
-
-		if resp.ContentLength > 0 {
-			return resp.ContentLength, nil
-		}
-	}
-
-	// fallback to range request
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	req.Header.Set("Range", "bytes=0-0")
-
-	resp, err = client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	cr := resp.Header.Get("Content-Range")
-
-	var start, end, size int64
-	_, err = fmt.Sscanf(cr, "bytes %d-%d/%d", &start, &end, &size)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse Content-Range header")
-	}
-
-	return size, nil
-}
-
 func Download(url string, output string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var client = &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 100,
-			MaxConnsPerHost:     100,
+			MaxIdleConns:        256,
+			MaxIdleConnsPerHost: 64,
+			MaxConnsPerHost:     64,
 			DisableCompression:  true,
 			IdleConnTimeout:     90 * time.Second,
-			ForceAttemptHTTP2:   false, // disable HTTP/2
-			TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{},
+			ForceAttemptHTTP2:   true,
 		},
 	}
 
@@ -77,37 +46,72 @@ func Download(url string, output string) error {
 
 	defer file.Close()
 
-	file.Truncate(size)
+	if err := file.Truncate(size); err != nil {
+		return fmt.Errorf("failed to pre-allocate file: %w", err)
+	}
 
 	// Start progress display
 	stop := make(chan struct{})
 
 	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-stop:
 				return
-			default:
+			case <-ticker.C:
 				prog.Print()
-				time.Sleep(time.Second)
 			}
 		}
 	}()
 
-	chunkQueue := make(chan Chunk, 100)
-
-	numWorkers := 4
-
-	var wg sync.WaitGroup
-
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go Worker(client, url, file, prog, chunkQueue, &wg)
+	supportsRange, err := serverSupportsRange(ctx, client, url)
+	if err != nil {
+		close(stop)
+		return err
 	}
 
-	chunkSize := int64(4 * 1024 * 1024) // 4 MB
+	if !supportsRange {
+		fmt.Println("Range requests are not available for this URL; falling back to single-stream download")
+		if err := DownloadSingle(ctx, client, url, file, prog); err != nil {
+			close(stop)
+			return err
+		}
+		close(stop)
+		fmt.Println("Download completed successfully")
+		return nil
+	}
 
+	numWorkers := utils.DecideWorkers(size)
+	if override := os.Getenv("GODOWNLOADER_WORKERS"); override != "" {
+		v, parseErr := strconv.Atoi(override)
+		if parseErr == nil && v > 0 {
+			numWorkers = v
+		}
+	}
+
+	fmt.Println("Num_Workers:", numWorkers)
+
+	chunkQueue := make(chan Chunk, numWorkers*2)
+	errCh := make(chan error, numWorkers)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go Worker(ctx, cancel, client, url, file, prog, chunkQueue, errCh, &wg)
+	}
+
+	chunkSize := int64(16 * 1024 * 1024) // 16 MB
+
+enqueueLoop:
 	for start := int64(0); start < size; start += chunkSize {
+		select {
+		case <-ctx.Done():
+			break enqueueLoop
+		default:
+		}
 
 		end := start + chunkSize - 1
 
@@ -115,15 +119,27 @@ func Download(url string, output string) error {
 			end = size - 1
 		}
 
-		chunkQueue <- Chunk{
+		chunk := Chunk{
 			Start: start,
 			End:   end,
 		}
+
+		select {
+		case <-ctx.Done():
+			break enqueueLoop
+		case chunkQueue <- chunk:
+		}
 	}
+
 	close(chunkQueue)
 
 	wg.Wait()
 	close(stop)
+	close(errCh)
+
+	if err, ok := <-errCh; ok {
+		return err
+	}
 
 	fmt.Println("Download completed successfully")
 
