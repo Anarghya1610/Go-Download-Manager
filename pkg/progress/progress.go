@@ -10,13 +10,17 @@ type Progress struct {
 	Total      int64
 	Downloaded int64
 	startTime  time.Time
+
+	lastBytes int64
+	lastTime  time.Time
 }
 
 func New(total int64) *Progress {
+	now := time.Now()
 	return &Progress{
-		Total:      total,
-		Downloaded: 0,
-		startTime:  time.Now(),
+		Total:     total,
+		startTime: now,
+		lastTime:  now,
 	}
 }
 
@@ -29,9 +33,15 @@ func (p *Progress) Print() {
 
 	percent := float64(downloaded) / float64(p.Total) * 100
 
-	elapsed := time.Since(p.startTime).Seconds()
+	now := time.Now()
+	elapsed := now.Sub(p.lastTime).Seconds()
 
-	speed := float64(downloaded) / elapsed / (1024 * 1024)
+	bytes := downloaded - p.lastBytes
+
+	speed := float64(bytes) / elapsed / (1024 * 1024)
+
+	p.lastBytes = downloaded
+	p.lastTime = now
 
 	fmt.Printf("\rDownloading: %.2f%% | Speed: %.2f MB/s", percent, speed)
 }
