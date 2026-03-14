@@ -5,10 +5,22 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Anarghya1610/godownloader/pkg/progress"
 )
+
+func Worker(client *http.Client, url string, file *os.File, prog *progress.Progress, chunkQueue <-chan Chunk, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for chunk := range chunkQueue {
+		err := DownloadChunkWithRetry(client, url, chunk, file, prog)
+		if err != nil {
+			fmt.Println("Error downloading chunk:", err)
+		}
+	}
+}
 
 func DownloadChunkWithRetry(client *http.Client, url string, chunk Chunk, file *os.File, prog *progress.Progress) error {
 

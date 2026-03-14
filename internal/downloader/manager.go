@@ -52,20 +52,24 @@ func Download(url string, output string) error {
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 100,
 			MaxConnsPerHost:     100,
+			DisableCompression:  true,
 			IdleConnTimeout:     90 * time.Second,
 			ForceAttemptHTTP2:   false, // disable HTTP/2
 			TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{},
 		},
 	}
 
+	// Get file size
 	size, err := getFileSize(url, client)
 	if err != nil {
 		return fmt.Errorf("failed to get file size: %w", err)
 	}
 	fmt.Println("File size:", size, "bytes")
 
+	// Initialize progress
 	prog := progress.New(size)
 
+	// Create output file
 	file, err := os.Create(output)
 	if err != nil {
 		return err
@@ -73,8 +77,9 @@ func Download(url string, output string) error {
 
 	defer file.Close()
 
-	//file.Truncate(size)
+	file.Truncate(size)
 
+	// Start progress display
 	stop := make(chan struct{})
 
 	go func() {
@@ -89,34 +94,33 @@ func Download(url string, output string) error {
 		}
 	}()
 
-	numWorkers := 8
-	chunkSize := size / int64(numWorkers)
+	chunkQueue := make(chan Chunk, 100)
 
-	var chunks []Chunk
-
-	for i := 0; i < numWorkers; i++ {
-		start := int64(i) * chunkSize
-		end := start + chunkSize - 1
-
-		if i == numWorkers-1 {
-			end = size - 1
-		}
-
-		chunks = append(chunks, Chunk{Start: start, End: end})
-	}
+	numWorkers := 4
 
 	var wg sync.WaitGroup
 
-	for _, chunk := range chunks {
+	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go func(c Chunk) {
-			defer wg.Done()
-			err := DownloadChunkWithRetry(client, url, c, file, prog)
-			if err != nil {
-				fmt.Println("Error downloading chunk:", err)
-			}
-		}(chunk)
+		go Worker(client, url, file, prog, chunkQueue, &wg)
 	}
+
+	chunkSize := int64(4 * 1024 * 1024) // 4 MB
+
+	for start := int64(0); start < size; start += chunkSize {
+
+		end := start + chunkSize - 1
+
+		if end >= size {
+			end = size - 1
+		}
+
+		chunkQueue <- Chunk{
+			Start: start,
+			End:   end,
+		}
+	}
+	close(chunkQueue)
 
 	wg.Wait()
 	close(stop)
