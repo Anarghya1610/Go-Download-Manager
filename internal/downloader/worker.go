@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,7 +104,7 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 	}
 	req = req.WithContext(ctx)
 
-	resumeStart := chunk.Start + chunk.Downloaded
+	resumeStart := chunk.Start + chunk.State.Downloaded
 	if resumeStart > chunk.End {
 		return nil
 	}
@@ -129,10 +130,23 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 		return fmt.Errorf("%w: status=%d, range=%s, content-range=%q", ErrNoPartialContent, resp.StatusCode, rangeHeader, resp.Header.Get("Content-Range"))
 	}
 
+	contentRange := resp.Header.Get("Content-Range")
+	expectedPrefix := fmt.Sprintf("bytes %d-%d/", resumeStart, chunk.End)
+
+	if !strings.HasPrefix(contentRange, expectedPrefix) {
+		return fmt.Errorf("invalid content-range: got %s expected prefix %s", contentRange, expectedPrefix)
+	}
+
 	offset := resumeStart
 
 	for {
 		n, readErr := resp.Body.Read(buffer)
+
+		remaining := chunk.End - offset + 1
+		if int64(n) > remaining {
+			n = int(remaining)
+		}
+
 		if n > 0 {
 			written, writeErr := file.WriteAt(buffer[:n], offset)
 			if writeErr != nil {
@@ -140,11 +154,10 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 			}
 
 			if written != n {
-				return fmt.Errorf("written bytes mismatch: expected %d, got %d", n, written)
+				return fmt.Errorf("Written bytes mismatch: expected %d, got %d", n, written)
 			}
 
 			offset += int64(written)
-			chunk.Downloaded += int64(written)
 			if chunk.State != nil {
 				if chunk.State.Parent != nil {
 					chunk.State.Parent.Mu.Lock()
@@ -164,6 +177,11 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 		if readErr != nil {
 			return readErr
 		}
+	}
+
+	expected := chunk.End - resumeStart + 1
+	if chunk.State.Downloaded != expected {
+		return fmt.Errorf("Chunk incomplete: expected %d got %d", expected, chunk.State.Downloaded)
 	}
 
 	return nil

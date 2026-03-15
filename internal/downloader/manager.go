@@ -134,20 +134,6 @@ func Download(url string, output string) error {
 	// Start progress display
 	stop := make(chan struct{})
 
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ticker.C:
-				prog.Print()
-			}
-		}
-	}()
-
 	supportsRange, err := serverSupportsRange(ctx, client, url)
 	if err != nil {
 		close(stop)
@@ -175,6 +161,20 @@ func Download(url string, output string) error {
 
 	fmt.Println("Num_Workers:", numWorkers)
 
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				prog.Print()
+			}
+		}
+	}()
+
 	chunkQueue := make(chan Chunk, numWorkers*4)
 	errCh := make(chan error, numWorkers)
 
@@ -190,10 +190,9 @@ enqueueLoop:
 		chunkSize := c.End - c.Start + 1
 		if c.Downloaded < chunkSize {
 			chunk := Chunk{
-				Start:      c.Start,
-				End:        c.End,
-				Downloaded: c.Downloaded,
-				State:      &state.Chunks[i],
+				Start: c.Start,
+				End:   c.End,
+				State: &state.Chunks[i],
 			}
 			select {
 			case <-ctx.Done():
@@ -214,6 +213,14 @@ enqueueLoop:
 		return err
 	}
 
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	if stat.Size() != size {
+		return fmt.Errorf("File corrupted: expected size %d got %d", size, stat.Size())
+	}
 	fmt.Println("Download completed successfully")
 
 	cancel()

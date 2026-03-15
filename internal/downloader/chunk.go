@@ -5,8 +5,7 @@ import (
 )
 
 type Chunk struct {
-	Start      int64
-	End        int64
-	Downloaded int64
-	State      *metadata.ChunkState
+	Start int64
+	End   int64
+	State *metadata.ChunkState
 }
