@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"sync"
@@ -67,6 +68,7 @@ func DownloadChunkWithRetry(ctx context.Context, client *http.Client, url string
 		var rateLimitErr *RateLimitError
 		if errors.As(err, &rateLimitErr) {
 			wait := rateLimitErr.RetryAfter
+			wait += time.Duration(rand.Intn(1000)) * time.Millisecond
 			if wait <= 0 {
 				wait = time.Duration(1<<i) * time.Second
 				if wait > 30*time.Second {
@@ -101,7 +103,11 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 	}
 	req = req.WithContext(ctx)
 
-	rangeHeader := fmt.Sprintf("bytes=%d-%d", chunk.Start, chunk.End)
+	resumeStart := chunk.Start + chunk.Downloaded
+	if resumeStart > chunk.End {
+		return nil
+	}
+	rangeHeader := fmt.Sprintf("bytes=%d-%d", resumeStart, chunk.End)
 	req.Header.Set("Range", rangeHeader)
 
 	resp, err := client.Do(req)
@@ -109,6 +115,7 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 		return err
 	}
 	defer resp.Body.Close()
+	//fmt.Println("protocol used: ", resp.Proto)
 
 	if resp.StatusCode != http.StatusPartialContent {
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -122,7 +129,7 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 		return fmt.Errorf("%w: status=%d, range=%s, content-range=%q", ErrNoPartialContent, resp.StatusCode, rangeHeader, resp.Header.Get("Content-Range"))
 	}
 
-	offset := chunk.Start
+	offset := resumeStart
 
 	for {
 		n, readErr := resp.Body.Read(buffer)
@@ -137,6 +144,16 @@ func DownloadChunk(ctx context.Context, client *http.Client, url string, chunk C
 			}
 
 			offset += int64(written)
+			chunk.Downloaded += int64(written)
+			if chunk.State != nil {
+				if chunk.State.Parent != nil {
+					chunk.State.Parent.Mu.Lock()
+					chunk.State.Downloaded += int64(written)
+					chunk.State.Parent.Mu.Unlock()
+				} else {
+					chunk.State.Downloaded += int64(written)
+				}
+			}
 			prog.Add(int64(written))
 		}
 

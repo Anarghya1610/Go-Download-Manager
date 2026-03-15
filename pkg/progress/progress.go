@@ -28,6 +28,11 @@ func (p *Progress) Add(n int64) {
 	atomic.AddInt64(&p.Downloaded, n)
 }
 
+func (p *Progress) SetResume(n int64, startedAt int64) {
+	p.startTime = time.Unix(startedAt, 0)
+	atomic.StoreInt64(&p.Downloaded, n)
+}
+
 func (p *Progress) Print() {
 	downloaded := atomic.LoadInt64(&p.Downloaded)
 
@@ -47,8 +52,13 @@ func (p *Progress) Print() {
 		speed = float64(bytes) / elapsed / (1024 * 1024)
 	}
 
+	averageSpeed := 0.0
+	if totalTimeElapsed > 0 {
+		averageSpeed = float64(downloaded) / totalTimeElapsed / (1024 * 1024)
+	}
+
 	p.lastBytes = downloaded
 	p.lastTime = now
 
-	fmt.Printf("\rDownloading: %.2f%% | Speed: %.2f MB/s | Time elapsed: %.0f s", percent, speed, totalTimeElapsed)
+	fmt.Printf("\rDownloading: %.2f%% | Speed: %.2f MB/s | Average Speed: %.2f MB/s | Time elapsed: %.0fs", percent, speed, averageSpeed, totalTimeElapsed)
 }
