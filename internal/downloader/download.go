@@ -15,8 +15,8 @@ import (
 	"github.com/Anarghya1610/godownloader/pkg/progress"
 )
 
-func Download(url string, output string) error {
-	ctx, cancel := context.WithCancel(context.Background())
+func Download(ctx context.Context, url string, output string) error {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var client = &http.Client{
