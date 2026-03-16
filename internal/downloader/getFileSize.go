@@ -18,6 +18,7 @@ func getFileSize(url string, client *http.Client) (int64, error) {
 
 	// fallback to range request
 	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "godownloader/1.0")
 	if err != nil {
 		return 0, err
 	}
@@ -42,12 +43,11 @@ func getFileSize(url string, client *http.Client) (int64, error) {
 }
 
 func serverSupportsRange(ctx context.Context, client *http.Client, url string) (bool, error) {
-	req, err := http.NewRequest("GET", url, nil)
+
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return false, err
 	}
-	req = req.WithContext(ctx)
-	req.Header.Set("Range", "bytes=0-0")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -55,7 +55,7 @@ func serverSupportsRange(ctx context.Context, client *http.Client, url string) (
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusPartialContent {
+	if resp.Header.Get("Accept-Ranges") == "bytes" {
 		return true, nil
 	}
 

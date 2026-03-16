@@ -2,9 +2,7 @@ package downloader
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -19,17 +17,7 @@ func Download(ctx context.Context, url string, output string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var client = &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        256,
-			MaxConnsPerHost:     64,
-			MaxIdleConnsPerHost: 64,
-			DisableCompression:  true,
-			IdleConnTimeout:     90 * time.Second,
-			ForceAttemptHTTP2:   false,
-			TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{},
-		},
-	}
+	client := client
 
 	metaPath := output + ".meta"
 
@@ -44,6 +32,11 @@ func Download(ctx context.Context, url string, output string) error {
 		state, err = metadata.Load(metaPath)
 		if err != nil {
 			return err
+		}
+
+		if state.URL != url {
+			os.Remove(metaPath)
+			state = nil
 		}
 
 		size = state.Size
@@ -127,8 +120,11 @@ func Download(ctx context.Context, url string, output string) error {
 
 	defer file.Close()
 
-	if err := file.Truncate(size); err != nil {
-		return fmt.Errorf("Failed to pre-allocate file: %w", err)
+	stat, _ := file.Stat()
+	if stat.Size() != size {
+		if err := file.Truncate(size); err != nil {
+			return err
+		}
 	}
 
 	// Start progress display
@@ -206,14 +202,17 @@ enqueueLoop:
 
 	wg.Wait()
 	close(stop)
-	close(errCh)
 
-	if err, ok := <-errCh; ok {
-		cancel()
-		return err
+	select {
+	case err := <-errCh:
+		if err != nil {
+			cancel()
+			return err
+		}
+	default:
 	}
 
-	stat, err := file.Stat()
+	stat, err = file.Stat()
 	if err != nil {
 		return err
 	}
