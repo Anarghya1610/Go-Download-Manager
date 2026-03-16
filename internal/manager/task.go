@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/Anarghya1610/godownloader/internal/downloader"
+	"github.com/Anarghya1610/godownloader/pkg/progress"
 )
 
 type TaskStatus string
@@ -26,6 +27,8 @@ type DownloadTask struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	progress *progress.Progress
 
 	Mu sync.Mutex
 }

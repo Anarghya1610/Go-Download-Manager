@@ -11,8 +11,9 @@ type Progress struct {
 	Downloaded int64
 	startTime  time.Time
 
-	lastBytes int64
-	lastTime  time.Time
+	lastBytes     int64
+	lastTime      time.Time
+	newDownloaded int64
 }
 
 func New(total int64) *Progress {
@@ -26,11 +27,14 @@ func New(total int64) *Progress {
 
 func (p *Progress) Add(n int64) {
 	atomic.AddInt64(&p.Downloaded, n)
+	atomic.AddInt64(&p.newDownloaded, n)
 }
 
-func (p *Progress) SetResume(n int64, startedAt int64) {
-	p.startTime = time.Unix(startedAt, 0)
+func (p *Progress) SetResume(n int64) {
+	p.startTime = time.Now()
+	p.lastBytes = n
 	atomic.StoreInt64(&p.Downloaded, n)
+	atomic.StoreInt64(&p.newDownloaded, 0)
 }
 
 func (p *Progress) Print() {
@@ -52,9 +56,10 @@ func (p *Progress) Print() {
 		speed = float64(bytes) / elapsed / (1024 * 1024)
 	}
 
+	newDownloaded := atomic.LoadInt64(&p.newDownloaded)
 	averageSpeed := 0.0
 	if totalTimeElapsed > 0 {
-		averageSpeed = float64(downloaded) / totalTimeElapsed / (1024 * 1024)
+		averageSpeed = float64(newDownloaded) / totalTimeElapsed / (1024 * 1024)
 	}
 
 	p.lastBytes = downloaded

@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -33,7 +32,6 @@ func NewManager(maxConcurrent int) *Manager {
 
 func (m *Manager) worker() {
 	for task := range m.queue {
-		fmt.Println("Worker started:", task.ID)
 		task.Start()
 	}
 }

@@ -65,7 +65,7 @@ func Download(ctx context.Context, url string, output string) error {
 		for _, c := range state.Chunks {
 			downloaded += c.Downloaded
 		}
-		prog.SetResume(downloaded, state.StartedAt)
+		prog.SetResume(downloaded)
 	}
 
 	if state == nil {
