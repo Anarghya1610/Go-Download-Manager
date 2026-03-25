@@ -10,8 +10,16 @@ import (
 
 func StartGUI(mgr *manager.Manager) {
 	a := app.New()
+
+	icon, _ := fyne.LoadResourceFromPath("icon.png")
+	a.SetIcon(icon)
+
 	w := a.NewWindow("Go Download Manager")
-	content := BuildDownloadUI(mgr)
+
+	w.SetIcon(icon)
+
+	content := BuildDownloadUI(w, mgr)
+
 	w.SetContent(container.NewPadded(content))
 	w.Resize(fyne.NewSize(700, 500))
 	w.ShowAndRun()
