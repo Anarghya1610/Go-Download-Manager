@@ -9,6 +9,7 @@ import (
 
 type Manager struct {
 	tasks map[string]*DownloadTask
+	order []string
 	queue chan *DownloadTask
 
 	maxConcurrent int
@@ -39,40 +40,71 @@ func (m *Manager) worker() {
 func (m *Manager) GetTasks() []*DownloadTask {
 	m.Mu.Lock()
 	defer m.Mu.Unlock()
+	tasks := make([]*DownloadTask, 0, len(m.order))
 
-	tasks := make([]*DownloadTask, 0, len(m.tasks))
-	for _, t := range m.tasks {
-		tasks = append(tasks, t)
+	for _, id := range m.order {
+		if t, ok := m.tasks[id]; ok {
+			tasks = append(tasks, t)
+		}
 	}
 	return tasks
 }
 
-func (m *Manager) AddTask(url string, output string) string {
+func (m *Manager) AddTask(url string, output string, autoStart bool) string {
 	id := uuid.New().String()
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	status := StatusPaused
+	if autoStart {
+		status = StatusQueued
+	}
 
 	task := &DownloadTask{
 		ID:     id,
 		URL:    url,
 		Output: output,
-		Status: StatusQueued,
+		Status: status,
 		ctx:    ctx,
 		cancel: cancel,
 	}
+
 	m.Mu.Lock()
 	m.tasks[id] = task
+	m.order = append(m.order, id)
 	m.Mu.Unlock()
+
+	if autoStart {
+		select {
+		case m.queue <- task:
+		default:
+			go func() { m.queue <- task }()
+		}
+	}
+
+	m.SaveTasks()
+
+	return id
+}
+
+func (m *Manager) StartTask(id string) {
+	m.Mu.Lock()
+	task, exists := m.tasks[id]
+	m.Mu.Unlock()
+
+	if !exists {
+		return
+	}
+
+	task.Mu.Lock()
+	task.Status = StatusRunning
+	task.Mu.Unlock()
 
 	select {
 	case m.queue <- task:
 	default:
 		go func() { m.queue <- task }()
 	}
-
-	m.SaveTasks()
-
-	return id
 }
 
 func (m *Manager) Pause(id string) {
@@ -85,33 +117,30 @@ func (m *Manager) Pause(id string) {
 	}
 
 	task.Mu.Lock()
-	defer task.Mu.Unlock()
+	task.isPaused = true // ✅ mark intent
+	task.Status = StatusPaused
+	task.Mu.Unlock()
 
-	if task.Status == StatusRunning {
-		task.cancel()
-		task.Status = StatusPaused
-	}
-	m.SaveTasks()
+	task.cancel()
 }
 
 func (m *Manager) Cancel(id string) {
 	m.Mu.Lock()
-	task, exists := m.tasks[id]
-	if exists {
-		delete(m.tasks, id)
-	}
-	m.SaveTasks()
-	m.Mu.Unlock()
+	defer m.Mu.Unlock()
 
+	task, exists := m.tasks[id]
 	if !exists {
 		return
 	}
-
-	task.Mu.Lock()
-	defer task.Mu.Unlock()
-
 	task.cancel()
-	task.Status = StatusCancelled
+	delete(m.tasks, id)
+	// ✅ remove from order slice
+	for i, v := range m.order {
+		if v == id {
+			m.order = append(m.order[:i], m.order[i+1:]...)
+			break
+		}
+	}
 }
 
 func (m *Manager) Resume(id string) {
@@ -123,20 +152,19 @@ func (m *Manager) Resume(id string) {
 		return
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	task.Mu.Lock()
-	defer task.Mu.Unlock()
+	task.ctx = ctx
+	task.cancel = cancel
+	task.isPaused = false // ✅ reset flag
+	task.Status = StatusRunning
+	task.Mu.Unlock()
 
-	if task.Status == StatusPaused {
-		ctx, cancel := context.WithCancel(context.Background())
-		task.ctx = ctx
-		task.cancel = cancel
-		task.Status = StatusQueued
-
-		select {
-		case m.queue <- task:
-		default:
-			go func() { m.queue <- task }()
-		}
+	select {
+	case m.queue <- task:
+	default:
+		go func() { m.queue <- task }()
 	}
 }
 

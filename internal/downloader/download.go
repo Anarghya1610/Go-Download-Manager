@@ -13,7 +13,7 @@ import (
 	"github.com/Anarghya1610/gdm/pkg/progress"
 )
 
-func Download(ctx context.Context, url string, output string) error {
+func Download(ctx context.Context, url string, output string, setProgress func(*progress.Progress)) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -53,6 +53,9 @@ func Download(ctx context.Context, url string, output string) error {
 
 	// Initialize progress
 	prog := progress.New(size)
+	if setProgress != nil {
+		setProgress(prog)
+	}
 	if state != nil {
 		var downloaded int64
 		for _, c := range state.Chunks {
@@ -130,10 +133,16 @@ func Download(ctx context.Context, url string, output string) error {
 	// Start progress display
 	stop := make(chan struct{})
 
-	supportsRange, err := serverSupportsRange(ctx, client, url)
-	if err != nil {
-		close(stop)
-		return err
+	var supportsRange bool
+	if state != nil {
+		// ✅ already using chunked download before → must support range
+		supportsRange = true
+	} else {
+		supportsRange, err = serverSupportsRange(ctx, client, url)
+		if err != nil {
+			close(stop)
+			return err
+		}
 	}
 
 	if !supportsRange {

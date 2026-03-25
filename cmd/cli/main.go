@@ -20,7 +20,7 @@ func main() {
 
 	mgr := manager.NewManager(3)
 
-	id1 := mgr.AddTask(url, output)
+	id1 := mgr.AddTask(url, output, true)
 	fmt.Println("Download started with ID:", id1)
 
 	select {} // keep program alive

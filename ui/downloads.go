@@ -108,7 +108,7 @@ func BuildDownloadUI(mgr *manager.Manager) fyne.CanvasObject {
 			return
 		}
 
-		mgr.AddTask(url, file)
+		mgr.AddTask(url, file, true)
 
 		urlEntry.SetText("")
 		fileEntry.SetText("")
@@ -144,9 +144,11 @@ func BuildDownloadUI(mgr *manager.Manager) fyne.CanvasObject {
 		}
 	}()
 
-	return container.NewVBox(
-		form,
-		addBtn,
-		list,
+	return container.NewBorder(
+		container.NewVBox(form, addBtn), // top
+		nil,
+		nil,
+		nil,
+		list, // center → expands fully
 	)
 }

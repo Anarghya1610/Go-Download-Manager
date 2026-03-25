@@ -34,6 +34,8 @@ type DownloadTask struct {
 	progress *progress.Progress
 
 	Mu sync.Mutex
+
+	isPaused bool
 }
 
 func (t *DownloadTask) Start() {
@@ -42,19 +44,18 @@ func (t *DownloadTask) Start() {
 	t.Status = StatusRunning
 	t.Mu.Unlock()
 
-	err := downloader.Download(t.ctx, t.URL, t.Output)
+	err := downloader.Download(t.ctx, t.URL, t.Output, func(p *progress.Progress) {
+		t.Mu.Lock()
+		t.progress = p
+		t.Mu.Unlock()
+	})
 
 	t.Mu.Lock()
 	defer t.Mu.Unlock()
 
 	if err != nil {
-
 		if t.ctx.Err() == context.Canceled {
-
-			if t.Status != StatusPaused {
-				t.Status = StatusCancelled
-			}
-
+			// DO NOT treat as error EVER
 			return
 		}
 
@@ -87,13 +88,12 @@ func (t *DownloadTask) GetStatus() string {
 
 func (t *DownloadTask) GetSpeed() string {
 	t.Mu.Lock()
-	defer t.Mu.Unlock()
+	p := t.progress
+	t.Mu.Unlock()
 
-	if t.progress == nil {
+	if p == nil {
 		return ""
 	}
 
-	speed := t.progress.GetSpeedMB()
-
-	return fmt.Sprintf("%.2f MB/s", speed)
+	return fmt.Sprintf("%.2f MB/s", p.GetSpeedMB())
 }

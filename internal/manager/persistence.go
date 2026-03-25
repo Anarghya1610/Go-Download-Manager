@@ -46,7 +46,7 @@ func (m *Manager) LoadTasks() error {
 	}
 
 	for _, t := range list {
-		m.AddTask(t.URL, t.Output)
+		m.AddTask(t.URL, t.Output, false)
 	}
 
 	return nil
