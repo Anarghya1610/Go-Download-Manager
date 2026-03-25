@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Anarghya1610/godownloader/internal/metadata"
-	"github.com/Anarghya1610/godownloader/internal/utils"
-	"github.com/Anarghya1610/godownloader/pkg/progress"
+	"github.com/Anarghya1610/gdm/internal/metadata"
+	"github.com/Anarghya1610/gdm/internal/utils"
+	"github.com/Anarghya1610/gdm/pkg/progress"
 )
 
 func Download(ctx context.Context, url string, output string) error {
@@ -148,7 +148,7 @@ func Download(ctx context.Context, url string, output string) error {
 	}
 
 	numWorkers := utils.DecideWorkers(size)
-	if override := os.Getenv("GODOWNLOADER_WORKERS"); override != "" {
+	if override := os.Getenv("GDM_WORKERS"); override != "" {
 		v, parseErr := strconv.Atoi(override)
 		if parseErr == nil && v > 0 {
 			numWorkers = v

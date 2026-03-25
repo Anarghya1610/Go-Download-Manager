@@ -37,6 +37,22 @@ func (p *Progress) SetResume(n int64) {
 	atomic.StoreInt64(&p.newDownloaded, 0)
 }
 
+func (p *Progress) GetSpeedMB() float64 {
+	now := time.Now()
+	downloaded := atomic.LoadInt64(&p.Downloaded)
+	elapsed := now.Sub(p.lastTime).Seconds()
+	if elapsed <= 0 {
+		return 0
+	}
+
+	bytes := downloaded - p.lastBytes
+	speed := float64(bytes) / elapsed / (1024 * 1024) // MB/s
+	p.lastBytes = downloaded
+	p.lastTime = now
+
+	return speed
+}
+
 func (p *Progress) Print() {
 	downloaded := atomic.LoadInt64(&p.Downloaded)
 

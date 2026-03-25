@@ -1,4 +1,4 @@
-module github.com/Anarghya1610/godownloader
+module github.com/Anarghya1610/gdm
 
 go 1.26.0
 

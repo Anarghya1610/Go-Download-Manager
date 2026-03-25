@@ -1,1 +1,70 @@
-.rar
+# -----------------------------
+# Go build artifacts
+# -----------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build directories
+/bin/
+/build/
+/dist/
+
+# -----------------------------
+# Go workspace / modules
+# -----------------------------
+vendor/
+*.mod
+*.sum
+
+# (Optional: keep go.mod & go.sum tracked — recommended)
+!go.mod
+!go.sum
+
+# -----------------------------
+# OS files
+# -----------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -----------------------------
+# IDE / Editor
+# -----------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+
+# -----------------------------
+# Runtime data (IMPORTANT)
+# -----------------------------
+# Download metadata
+*.meta
+
+# Persisted tasks
+tasks.json
+
+# Partial downloads (optional)
+*.part
+
+# -----------------------------
+# Temporary files
+# -----------------------------
+tmp/
+temp/
+
+# -----------------------------
+# Fyne specific (if any cache)
+# -----------------------------
+fyne_metadata.json

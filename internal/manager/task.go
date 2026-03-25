@@ -2,10 +2,12 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 
-	"github.com/Anarghya1610/godownloader/internal/downloader"
-	"github.com/Anarghya1610/godownloader/pkg/progress"
+	"github.com/Anarghya1610/gdm/internal/downloader"
+	"github.com/Anarghya1610/gdm/pkg/progress"
 )
 
 type TaskStatus string
@@ -16,6 +18,7 @@ const (
 	StatusPaused    TaskStatus = "paused"
 	StatusCompleted TaskStatus = "completed"
 	StatusError     TaskStatus = "error"
+	StatusCancelled TaskStatus = "cancelled"
 )
 
 type DownloadTask struct {
@@ -45,9 +48,52 @@ func (t *DownloadTask) Start() {
 	defer t.Mu.Unlock()
 
 	if err != nil {
+
+		if t.ctx.Err() == context.Canceled {
+
+			if t.Status != StatusPaused {
+				t.Status = StatusCancelled
+			}
+
+			return
+		}
+
+		// real error
 		t.Status = StatusError
 		t.Error = err.Error()
-	} else {
-		t.Status = StatusCompleted
+		return
 	}
+
+	t.Status = StatusCompleted
+}
+
+func (t *DownloadTask) GetProgress() float64 {
+	t.Mu.Lock()
+	defer t.Mu.Unlock()
+
+	if t.progress == nil || t.progress.Total == 0 {
+		return 0
+	}
+	downloaded := atomic.LoadInt64(&t.progress.Downloaded)
+	return float64(downloaded) / float64(t.progress.Total)
+}
+
+func (t *DownloadTask) GetStatus() string {
+	t.Mu.Lock()
+	defer t.Mu.Unlock()
+
+	return string(t.Status)
+}
+
+func (t *DownloadTask) GetSpeed() string {
+	t.Mu.Lock()
+	defer t.Mu.Unlock()
+
+	if t.progress == nil {
+		return ""
+	}
+
+	speed := t.progress.GetSpeedMB()
+
+	return fmt.Sprintf("%.2f MB/s", speed)
 }

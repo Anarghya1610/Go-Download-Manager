@@ -36,6 +36,17 @@ func (m *Manager) worker() {
 	}
 }
 
+func (m *Manager) GetTasks() []*DownloadTask {
+	m.Mu.Lock()
+	defer m.Mu.Unlock()
+
+	tasks := make([]*DownloadTask, 0, len(m.tasks))
+	for _, t := range m.tasks {
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
 func (m *Manager) AddTask(url string, output string) string {
 	id := uuid.New().String()
 
@@ -59,6 +70,8 @@ func (m *Manager) AddTask(url string, output string) string {
 		go func() { m.queue <- task }()
 	}
 
+	m.SaveTasks()
+
 	return id
 }
 
@@ -78,6 +91,27 @@ func (m *Manager) Pause(id string) {
 		task.cancel()
 		task.Status = StatusPaused
 	}
+	m.SaveTasks()
+}
+
+func (m *Manager) Cancel(id string) {
+	m.Mu.Lock()
+	task, exists := m.tasks[id]
+	if exists {
+		delete(m.tasks, id)
+	}
+	m.SaveTasks()
+	m.Mu.Unlock()
+
+	if !exists {
+		return
+	}
+
+	task.Mu.Lock()
+	defer task.Mu.Unlock()
+
+	task.cancel()
+	task.Status = StatusCancelled
 }
 
 func (m *Manager) Resume(id string) {

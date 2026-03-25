@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Anarghya1610/godownloader/internal/manager"
+	"github.com/Anarghya1610/gdm/internal/manager"
 )
 
 func main() {
 
 	if len(os.Args) < 3 {
 		fmt.Println("Usage:")
-		fmt.Println("  godownloader <url> <output>")
+		fmt.Println("  gdm <url> <output>")
 		return
 	}
 

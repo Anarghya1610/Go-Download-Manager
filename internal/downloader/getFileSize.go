@@ -18,7 +18,7 @@ func getFileSize(url string, client *http.Client) (int64, error) {
 
 	// fallback to range request
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "godownloader/1.0")
+	req.Header.Set("User-Agent", "gdm/1.0")
 	if err != nil {
 		return 0, err
 	}

@@ -1,7 +1,7 @@
 package downloader
 
 import (
-	"github.com/Anarghya1610/godownloader/internal/metadata"
+	"github.com/Anarghya1610/gdm/internal/metadata"
 )
 
 type Chunk struct {

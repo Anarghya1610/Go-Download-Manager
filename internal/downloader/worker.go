@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Anarghya1610/godownloader/pkg/progress"
+	"github.com/Anarghya1610/gdm/pkg/progress"
 )
 
 var ErrNoPartialContent = errors.New("server did not return partial content")
