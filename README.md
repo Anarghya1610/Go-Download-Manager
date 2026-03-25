@@ -21,10 +21,9 @@ GDM helps you download files faster with parallel chunks, and pause/resume contr
 ## Quick Start
 
 ```bash
-git clone https://github.com/Anarghya1610/gdm.git
-cd gdm
-go mod tidy
-go run ./cmd/gui
+git clone https://github.com/Anarghya1610/Go-Download-Manager.git
+cd Go-Download-Manager
+./GDM
 ```
 
 In the app:
@@ -36,12 +35,8 @@ In the app:
 
 ## Screenshots
 
-Add your app screenshots here when ready.
-
-```text
-assets/screenshot-1.png
-assets/screenshot-2.png
-```
+<img width="910" height="687" alt="img1" src="https://github.com/user-attachments/assets/d5f55e4e-c5a9-45b7-847a-d2236b3df716" />
+<img width="910" height="684" alt="img2" src="https://github.com/user-attachments/assets/35d5f97e-9e04-4dfa-874c-0dfdc3005e81" />
 
 ## Advanced (Optional)
 
@@ -52,7 +47,7 @@ PowerShell example:
 
 ```powershell
 $env:GDM_WORKERS=12
-go run ./cmd/gui
+./GDM
 ```
 
 ## Resume Data
@@ -65,10 +60,4 @@ go run ./cmd/gui
 ## Troubleshooting
 
 - Download is not parallel: server likely does not support range requests
-- Too many retries: lower `GDM_WORKERS`
-- GUI not opening: install Fyne prerequisites for your OS
-- Resume not working: use the same URL and output path
-
-## License
-
-No LICENSE file is included yet.
+- Too many retries: lower `GDM_WORKERS` or let the program decide worker count
